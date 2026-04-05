@@ -527,7 +527,7 @@ export function AnalyticsExplorer() {
           run("card", "card_games", {}, (r) => setRowsCard(r))
         }
       >
-        <p className="text-sm text-[#8fa39a]">Category = Card Game</p>
+        <p className="text-sm text-[#8fa39a]">Category = Card</p>
       </QueryBlock>
 
       <QueryBlock
@@ -538,7 +538,7 @@ export function AnalyticsExplorer() {
           run("tbl", "table_games", {}, (r) => setRowsTable(r))
         }
       >
-        <p className="text-sm text-[#8fa39a]">Category = Table Game</p>
+        <p className="text-sm text-[#8fa39a]">Category = Table</p>
       </QueryBlock>
 
       <QueryBlock

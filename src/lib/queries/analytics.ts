@@ -150,13 +150,13 @@ export async function runAnalytics(
     }
     case "card_games": {
       const r = await queryRows<GameRow[]>(
-        `SELECT GameID, Name, Category FROM GAMES WHERE Category = 'Card Game' ORDER BY Name`,
+        `SELECT GameID, Name, Category FROM GAMES WHERE Category = 'Card' ORDER BY Name`,
       );
       return r.ok ? { ok: true, rows: r.data } : { ok: false, error: r.error };
     }
     case "table_games": {
       const r = await queryRows<GameRow[]>(
-        `SELECT GameID, Name, Category FROM GAMES WHERE Category = 'Table Game' ORDER BY Name`,
+        `SELECT GameID, Name, Category FROM GAMES WHERE Category = 'Table' ORDER BY Name`,
       );
       return r.ok ? { ok: true, rows: r.data } : { ok: false, error: r.error };
     }
