@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+:root {
+  --bg-deep: #050807;
+  --bg-panel: #0c1210;
+  --bg-elevated: #111a17;
+  --border-subtle: rgba(201, 162, 39, 0.18);
+  --gold: #c9a227;
+  --gold-bright: #e8d48b;
+  --emerald: #0d3d2e;
+  --emerald-glow: #1a5c45;
+  --text-muted: #8fa39a;
+  --text: #e8f0ec;
+}
+
+@theme inline {
+  --color-casino-bg: var(--bg-deep);
+  --color-casino-panel: var(--bg-panel);
+  --color-casino-elevated: var(--bg-elevated);
+  --color-casino-gold: var(--gold);
+  --color-casino-gold-bright: var(--gold-bright);
+  --color-casino-emerald: var(--emerald);
+  --color-casino-text: var(--text);
+  --color-casino-muted: var(--text-muted);
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-cinzel), ui-serif, Georgia, serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--text);
+  background: var(--bg-deep);
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(26, 92, 69, 0.35), transparent),
+    radial-gradient(ellipse 80% 50% at 100% 50%, rgba(201, 162, 39, 0.06), transparent),
+    linear-gradient(180deg, #060a09 0%, #050807 40%, #030504 100%);
+  font-family: var(--font-sans);
+}
+
+/* Subtle grid overlay */
+body::before {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 30%, black, transparent);
+  z-index: 0;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.glow-ring {
+  box-shadow:
+    0 0 0 1px var(--border-subtle),
+    0 0 40px -12px rgba(201, 162, 39, 0.25);
+}
+
+.glow-ring-hover:hover {
+  box-shadow:
+    0 0 0 1px rgba(201, 162, 39, 0.35),
+    0 0 48px -8px rgba(201, 162, 39, 0.2);
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, var(--gold-bright) 0%, var(--gold) 50%, #a68419 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
