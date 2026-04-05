@@ -18,8 +18,8 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const [agg, featured, months] = await Promise.all([
     getAggregateStats(),
-    getFeaturedCasinos(4),
-    getVisitsByMonth(8),
+    getFeaturedCasinos(),
+    getVisitsByMonth(),
   ]);
 
   if (!agg.ok) {
@@ -53,9 +53,10 @@ export default async function Home() {
     );
   }
 
-  const chart = [...months.data]
-    .reverse()
-    .map((m) => ({ label: m.ym, visits: Number(m.cnt) }));
+  const chart = months.data.map((m) => ({
+    label: m.ym,
+    visits: Number(m.cnt),
+  }));
 
   return (
     <div className="flex-1">
@@ -70,8 +71,8 @@ export default async function Home() {
             <span className="text-gradient-gold">venues, players, and play</span>
           </h1>
           <p className="mt-6 max-w-2xl text-lg text-[#8fa39a]">
-            A calm, high-contrast command center for your casino portfolio — powered
-            by your Aiven MySQL data and secured server-side queries.
+            All figures on this page are computed from your MySQL tables (CASINO,
+            PLAYER, GAMES, VISITS) on each request — no static demo numbers.
           </p>
           <div className="mt-10 flex flex-wrap gap-4">
             <Link
@@ -95,31 +96,34 @@ export default async function Home() {
       <div className="mx-auto max-w-7xl space-y-12 px-4 py-12 sm:px-6 lg:px-8">
         <section>
           <h2 className="font-display text-xl text-[#e8d48b]">At a glance</h2>
-          <p className="mt-1 text-sm text-[#8fa39a]">Live counts from your database</p>
+          <p className="mt-1 text-sm text-[#8fa39a]">
+            Each number is <code className="text-[#c9a227]">COUNT(*)</code> on the
+            named table
+          </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               title="Casinos"
               value={agg.data.casinos}
               icon={Building2}
-              hint="Registered venues"
+              hint="Table: CASINO"
             />
             <StatCard
               title="Players"
               value={agg.data.players}
               icon={Users}
-              hint="Loyalty profiles"
+              hint="Table: PLAYER"
             />
             <StatCard
               title="Games"
               value={agg.data.games}
               icon={Dice5}
-              hint="Catalog titles"
+              hint="Table: GAMES"
             />
             <StatCard
               title="Visits"
               value={agg.data.visits}
               icon={Footprints}
-              hint="Recorded foot traffic"
+              hint="Table: VISITS"
             />
           </div>
         </section>
@@ -130,7 +134,7 @@ export default async function Home() {
               Visits by month
             </h3>
             <p className="mt-1 text-sm text-[#8fa39a]">
-              Recent aggregate from the VISITS table
+              Grouped by month from every row in VISITS
             </p>
             <div className="mt-6">
               {chart.length === 0 ? (

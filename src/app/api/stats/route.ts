@@ -4,7 +4,7 @@ import { getAggregateStats, getVisitsByMonth } from "@/lib/queries/stats";
 export async function GET() {
   const [agg, months] = await Promise.all([
     getAggregateStats(),
-    getVisitsByMonth(8),
+    getVisitsByMonth(),
   ]);
 
   if (!agg.ok) {
@@ -17,7 +17,7 @@ export async function GET() {
     );
   }
 
-  const chart = [...months.data].reverse().map((m) => ({
+  const chart = months.data.map((m) => ({
     label: m.ym,
     visits: Number(m.cnt),
   }));

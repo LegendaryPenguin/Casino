@@ -20,6 +20,12 @@ export function CasinosExplorer() {
   const [casinos, setCasinos] = useState<Casino[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
   const [managers, setManagers] = useState<string[]>([]);
+  const [capRange, setCapRange] = useState<{ min: number; max: number } | null>(
+    null,
+  );
+  const [sizeRange, setSizeRange] = useState<{ min: number; max: number } | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
 
   const [location, setLocation] = useState("");
@@ -39,6 +45,8 @@ export function CasinosExplorer() {
     }
     setLocations(data.locations);
     setManagers(data.managers);
+    if (data.capacityRange) setCapRange(data.capacityRange);
+    if (data.sizeRange) setSizeRange(data.sizeRange);
   }, []);
 
   const loadCasinos = useCallback(async () => {
@@ -119,7 +127,11 @@ export function CasinosExplorer() {
               className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
               value={minCapacity}
               onChange={(e) => setMinCapacity(e.target.value)}
-              placeholder="e.g. 500"
+              placeholder={
+                capRange
+                  ? `In data: ${capRange.min}–${capRange.max}`
+                  : "Min capacity"
+              }
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-[#8fa39a]">
@@ -130,7 +142,11 @@ export function CasinosExplorer() {
               className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
               value={minSize}
               onChange={(e) => setMinSize(e.target.value)}
-              placeholder="e.g. 10000"
+              placeholder={
+                sizeRange
+                  ? `In data: ${sizeRange.min.toLocaleString()}–${sizeRange.max.toLocaleString()}`
+                  : "Min size (sq ft)"
+              }
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-[#8fa39a]">

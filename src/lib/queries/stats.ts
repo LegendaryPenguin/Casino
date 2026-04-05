@@ -31,9 +31,8 @@ export async function getAggregateStats() {
   };
 }
 
-/** Featured: top casinos by visit count, then capacity */
-export async function getFeaturedCasinos(limit = 4) {
-  const lim = Math.min(100, Math.max(1, Math.floor(Number(limit) || 4)));
+/** All casinos, ranked by visit count then capacity (no row cap — entirely from DB). */
+export async function getFeaturedCasinos() {
   const sql = `
     SELECT c.CID, c.Name, c.Location, c.Phone, c.Capacity, c.Size, c.Manager,
            COUNT(v.PID) AS visit_count
@@ -41,7 +40,6 @@ export async function getFeaturedCasinos(limit = 4) {
     LEFT JOIN VISITS v ON v.CID = c.CID
     GROUP BY c.CID, c.Name, c.Location, c.Phone, c.Capacity, c.Size, c.Manager
     ORDER BY visit_count DESC, c.Capacity DESC
-    LIMIT ${lim}
   `;
   return queryRows<(CasinoRow & { visit_count: number })[]>(sql);
 }
@@ -51,16 +49,13 @@ interface VisitMonthRow extends RowDataPacket {
   cnt: number;
 }
 
-/** For charts: visits per month (recent) */
-export async function getVisitsByMonth(limitMonths = 6) {
-  const lim = Math.min(100, Math.max(1, Math.floor(Number(limitMonths) || 6)));
-  // `Date` is quoted — reserved in MySQL; avoid LIMIT ? (some servers + execute disagree).
+/** Visits per calendar month for every month present in VISITS (full history, ascending for charts). */
+export async function getVisitsByMonth() {
   const sql = `
     SELECT DATE_FORMAT(\`Date\`, '%Y-%m') AS ym, COUNT(*) AS cnt
     FROM VISITS
     GROUP BY DATE_FORMAT(\`Date\`, '%Y-%m')
-    ORDER BY ym DESC
-    LIMIT ${lim}
+    ORDER BY ym ASC
   `;
   return queryRows<VisitMonthRow[]>(sql);
 }

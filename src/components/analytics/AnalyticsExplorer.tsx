@@ -138,20 +138,20 @@ export function AnalyticsExplorer() {
     unknown
   >[] | null>(null);
 
-  const [minPoints, setMinPoints] = useState("5000");
+  const [minPoints, setMinPoints] = useState("");
   const [rowsPoints, setRowsPoints] = useState<Record<
     string,
     unknown
   >[] | null>(null);
 
-  const [d1, setD1] = useState("2025-09-01");
-  const [d2, setD2] = useState("2026-12-31");
+  const [d1, setD1] = useState("");
+  const [d2, setD2] = useState("");
   const [rowsVisits, setRowsVisits] = useState<Record<
     string,
     unknown
   >[] | null>(null);
 
-  const [minCap, setMinCap] = useState("800");
+  const [minCap, setMinCap] = useState("");
   const [rowsCap, setRowsCap] = useState<Record<string, unknown>[] | null>(
     null,
   );
@@ -172,21 +172,49 @@ export function AnalyticsExplorer() {
     null,
   );
 
-  const [topLimit, setTopLimit] = useState("10");
+  const [topLimit, setTopLimit] = useState("");
   const [rowsTop, setRowsTop] = useState<Record<string, unknown>[] | null>(
     null,
   );
 
+  const [pointsRange, setPointsRange] = useState<{
+    min: number;
+    max: number;
+  } | null>(null);
+  const [capRange, setCapRange] = useState<{ min: number; max: number } | null>(
+    null,
+  );
+
   const loadMeta = useCallback(async () => {
-    const [c, g] = await Promise.all([
+    const [c, g, d] = await Promise.all([
       fetch("/api/casinos/options").then((r) => r.json()),
       fetch("/api/games/options").then((r) => r.json()),
+      fetch("/api/analytics/defaults").then((r) => r.json()),
     ]);
     if (c.ok) {
       setCasinos(c.casinos);
       setLocations(c.locations);
     }
     if (g.ok) setGames(g.games);
+    if (d.ok) {
+      if (d.visitDateMin) setD1(d.visitDateMin);
+      if (d.visitDateMax) setD2(d.visitDateMax);
+      if (d.suggestedMinPoints != null) {
+        setMinPoints(String(d.suggestedMinPoints));
+      }
+      if (d.suggestedMinCapacity != null) {
+        setMinCap(String(d.suggestedMinCapacity));
+      }
+      if (d.playerCount != null && d.playerCount >= 1) {
+        setTopLimit(String(d.playerCount));
+      }
+      if (d.pointsMin != null && d.pointsMax != null) {
+        setPointsRange({ min: d.pointsMin, max: d.pointsMax });
+      }
+      if (d.casinoCapacityMin != null && d.casinoCapacityMax != null) {
+        setCapRange({ min: d.casinoCapacityMin, max: d.casinoCapacityMax });
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -353,15 +381,23 @@ export function AnalyticsExplorer() {
           )
         }
       >
-        <label className="flex max-w-xs flex-col gap-1 text-xs text-[#8fa39a]">
-          Minimum points (exclusive)
-          <input
-            type="number"
-            className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-            value={minPoints}
-            onChange={(e) => setMinPoints(e.target.value)}
-          />
-        </label>
+        <div className="space-y-2">
+          <label className="flex max-w-xs flex-col gap-1 text-xs text-[#8fa39a]">
+            Minimum points (exclusive)
+            <input
+              type="number"
+              className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
+              value={minPoints}
+              onChange={(e) => setMinPoints(e.target.value)}
+            />
+          </label>
+          {pointsRange ? (
+            <p className="text-xs text-[#6b7f76]">
+              PLAYER.Points in your DB: {pointsRange.min.toLocaleString()}–
+              {pointsRange.max.toLocaleString()}
+            </p>
+          ) : null}
+        </div>
       </QueryBlock>
 
       <QueryBlock
@@ -377,25 +413,30 @@ export function AnalyticsExplorer() {
           )
         }
       >
-        <div className="flex flex-wrap gap-4">
-          <label className="flex flex-col gap-1 text-xs text-[#8fa39a]">
-            Start
-            <input
-              type="date"
-              className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-              value={d1}
-              onChange={(e) => setD1(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-[#8fa39a]">
-            End
-            <input
-              type="date"
-              className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-              value={d2}
-              onChange={(e) => setD2(e.target.value)}
-            />
-          </label>
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-4">
+            <label className="flex flex-col gap-1 text-xs text-[#8fa39a]">
+              Start
+              <input
+                type="date"
+                className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
+                value={d1}
+                onChange={(e) => setD1(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-[#8fa39a]">
+              End
+              <input
+                type="date"
+                className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
+                value={d2}
+                onChange={(e) => setD2(e.target.value)}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-[#6b7f76]">
+            Defaults load from MIN/MAX(VISITS.Date) in your database.
+          </p>
         </div>
       </QueryBlock>
 
@@ -412,15 +453,23 @@ export function AnalyticsExplorer() {
           )
         }
       >
-        <label className="flex max-w-xs flex-col gap-1 text-xs text-[#8fa39a]">
-          Minimum capacity (exclusive)
-          <input
-            type="number"
-            className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-            value={minCap}
-            onChange={(e) => setMinCap(e.target.value)}
-          />
-        </label>
+        <div className="space-y-2">
+          <label className="flex max-w-xs flex-col gap-1 text-xs text-[#8fa39a]">
+            Minimum capacity (exclusive)
+            <input
+              type="number"
+              className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
+              value={minCap}
+              onChange={(e) => setMinCap(e.target.value)}
+            />
+          </label>
+          {capRange ? (
+            <p className="text-xs text-[#6b7f76]">
+              CASINO.Capacity in your DB: {capRange.min.toLocaleString()}–
+              {capRange.max.toLocaleString()}
+            </p>
+          ) : null}
+        </div>
       </QueryBlock>
 
       <QueryBlock
@@ -509,26 +558,32 @@ export function AnalyticsExplorer() {
         title="Top players by points"
         running={runningKey === "top"}
         rows={rowsTop}
-        onRun={() =>
-          run(
-            "top",
-            "top_players_by_points",
-            { limit: Number(topLimit) },
-            (r) => setRowsTop(r),
-          )
-        }
+        onRun={() => {
+          const p: Record<string, unknown> = {};
+          if (topLimit.trim() !== "") {
+            const n = Math.floor(Number(topLimit));
+            if (n >= 1) p.limit = Math.min(1000, n);
+          }
+          run("top", "top_players_by_points", p, (r) => setRowsTop(r));
+        }}
       >
-        <label className="flex max-w-xs flex-col gap-1 text-xs text-[#8fa39a]">
-          Limit (max 50)
-          <input
-            type="number"
-            min={1}
-            max={50}
-            className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-            value={topLimit}
-            onChange={(e) => setTopLimit(e.target.value)}
-          />
-        </label>
+        <div className="space-y-2">
+          <label className="flex max-w-xs flex-col gap-1 text-xs text-[#8fa39a]">
+            Limit (optional)
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
+              value={topLimit}
+              onChange={(e) => setTopLimit(e.target.value)}
+            />
+          </label>
+          <p className="text-xs text-[#6b7f76]">
+            Blank = all players (ORDER BY Points DESC). If set, capped at 1000 rows
+            for safety.
+          </p>
+        </div>
       </QueryBlock>
     </div>
   );

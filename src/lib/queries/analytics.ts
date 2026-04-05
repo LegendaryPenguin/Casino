@@ -175,9 +175,21 @@ export async function runAnalytics(
       return r.ok ? { ok: true, rows: r.data } : { ok: false, error: r.error };
     }
     case "top_players_by_points": {
-      const limit = Math.min(50, Math.max(1, Number(params.limit) || 10));
+      const raw = params.limit;
+      const str = raw === undefined || raw === null ? "" : String(raw).trim();
+      if (str === "") {
+        const r = await queryRows<PlayerRow[]>(
+          `SELECT PID, Email, VIP, Points FROM PLAYER ORDER BY Points DESC`,
+        );
+        return r.ok ? { ok: true, rows: r.data } : { ok: false, error: r.error };
+      }
+      const n = Math.floor(Number(str));
+      if (!Number.isFinite(n) || n < 1) {
+        return { ok: false, error: "limit must be a positive integer" };
+      }
+      const lim = Math.min(1000, n);
       const r = await queryRows<PlayerRow[]>(
-        `SELECT PID, Email, VIP, Points FROM PLAYER ORDER BY Points DESC LIMIT ${limit}`,
+        `SELECT PID, Email, VIP, Points FROM PLAYER ORDER BY Points DESC LIMIT ${lim}`,
       );
       return r.ok ? { ok: true, rows: r.data } : { ok: false, error: r.error };
     }

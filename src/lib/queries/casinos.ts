@@ -76,3 +76,15 @@ export async function listAllCasinoIdName() {
     `SELECT CID, Name FROM CASINO ORDER BY Name`,
   );
 }
+
+export async function casinoCapacityRange() {
+  return queryRows<{ min_cap: number; max_cap: number }[]>(
+    `SELECT MIN(Capacity) AS min_cap, MAX(Capacity) AS max_cap FROM CASINO`,
+  );
+}
+
+export async function casinoSizeRange() {
+  return queryRows<{ min_sz: number; max_sz: number }[]>(
+    `SELECT MIN(Size) AS min_sz, MAX(Size) AS max_sz FROM CASINO`,
+  );
+}
