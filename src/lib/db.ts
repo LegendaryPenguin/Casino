@@ -100,10 +100,16 @@ export async function queryRows<T>(
 ): Promise<DbResult<T>> {
   try {
     const pool = getPool();
-    const [rows] = await pool.execute<RowDataPacket[]>(
-      sqlText,
-      (params ?? []) as Parameters<typeof pool.execute>[1],
-    );
+    // Never pass an empty array to execute(): MySQL can treat it as a bind
+    // mismatch ("Incorrect arguments to mysqld_stmt_execute") when the SQL
+    // has no placeholders.
+    const [rows] =
+      params !== undefined && params.length > 0
+        ? await pool.execute<RowDataPacket[]>(
+            sqlText,
+            params as Parameters<typeof pool.execute>[1],
+          )
+        : await pool.execute<RowDataPacket[]>(sqlText);
     return { ok: true, data: rows as T };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Database error";

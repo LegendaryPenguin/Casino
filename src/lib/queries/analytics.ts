@@ -177,8 +177,7 @@ export async function runAnalytics(
     case "top_players_by_points": {
       const limit = Math.min(50, Math.max(1, Number(params.limit) || 10));
       const r = await queryRows<PlayerRow[]>(
-        `SELECT PID, Email, VIP, Points FROM PLAYER ORDER BY Points DESC LIMIT ?`,
-        [limit],
+        `SELECT PID, Email, VIP, Points FROM PLAYER ORDER BY Points DESC LIMIT ${limit}`,
       );
       return r.ok ? { ok: true, rows: r.data } : { ok: false, error: r.error };
     }

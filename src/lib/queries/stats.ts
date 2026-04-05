@@ -33,6 +33,7 @@ export async function getAggregateStats() {
 
 /** Featured: top casinos by visit count, then capacity */
 export async function getFeaturedCasinos(limit = 4) {
+  const lim = Math.min(100, Math.max(1, Math.floor(Number(limit) || 4)));
   const sql = `
     SELECT c.CID, c.Name, c.Location, c.Phone, c.Capacity, c.Size, c.Manager,
            COUNT(v.PID) AS visit_count
@@ -40,11 +41,9 @@ export async function getFeaturedCasinos(limit = 4) {
     LEFT JOIN VISITS v ON v.CID = c.CID
     GROUP BY c.CID, c.Name, c.Location, c.Phone, c.Capacity, c.Size, c.Manager
     ORDER BY visit_count DESC, c.Capacity DESC
-    LIMIT ?
+    LIMIT ${lim}
   `;
-  return queryRows<
-    (CasinoRow & { visit_count: number })[]
-  >(sql, [limit]);
+  return queryRows<(CasinoRow & { visit_count: number })[]>(sql);
 }
 
 interface VisitMonthRow extends RowDataPacket {
@@ -54,12 +53,14 @@ interface VisitMonthRow extends RowDataPacket {
 
 /** For charts: visits per month (recent) */
 export async function getVisitsByMonth(limitMonths = 6) {
+  const lim = Math.min(100, Math.max(1, Math.floor(Number(limitMonths) || 6)));
+  // `Date` is quoted — reserved in MySQL; avoid LIMIT ? (some servers + execute disagree).
   const sql = `
-    SELECT DATE_FORMAT(Date, '%Y-%m') AS ym, COUNT(*) AS cnt
+    SELECT DATE_FORMAT(\`Date\`, '%Y-%m') AS ym, COUNT(*) AS cnt
     FROM VISITS
-    GROUP BY ym
+    GROUP BY DATE_FORMAT(\`Date\`, '%Y-%m')
     ORDER BY ym DESC
-    LIMIT ?
+    LIMIT ${lim}
   `;
-  return queryRows<VisitMonthRow[]>(sql, [limitMonths]);
+  return queryRows<VisitMonthRow[]>(sql);
 }
