@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { messageFromApiJson } from "@/lib/api-errors";
 
 type GameRow = {
   GameID: number;
@@ -20,9 +21,9 @@ export function GamesExplorer() {
 
   const loadOptions = useCallback(async () => {
     const res = await fetch("/api/games/options");
-    const data = await res.json();
-    if (!data.ok) {
-      toast.error(data.error || "Failed to load categories");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      toast.error(messageFromApiJson(res, data));
       return;
     }
     setCategories(data.categories);
@@ -34,9 +35,9 @@ export function GamesExplorer() {
     if (category) params.set("category", category);
     try {
       const res = await fetch(`/api/games?${params.toString()}`);
-      const data = await res.json();
-      if (!data.ok) {
-        toast.error(data.error || "Failed to load games");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        toast.error(messageFromApiJson(res, data));
         setGames([]);
         return;
       }

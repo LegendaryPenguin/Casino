@@ -4,6 +4,7 @@ import {
   runAnalytics,
   type AnalyticsQueryId,
 } from "@/lib/queries/analytics";
+import { formatZodError, parseAnalyticsParams } from "@/lib/validation/schemas";
 
 const queryIds: z.ZodType<AnalyticsQueryId> = z.enum([
   "casinos_by_location",
@@ -31,19 +32,30 @@ export async function POST(req: NextRequest) {
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Invalid JSON body" },
+      { status: 400 },
+    );
   }
 
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json(
-      { ok: false, error: parsed.error.flatten().fieldErrors },
+      { ok: false, error: formatZodError(parsed.error) },
       { status: 400 },
     );
   }
 
   const { queryId, params } = parsed.data;
-  const result = await runAnalytics(queryId, params);
+  const paramCheck = parseAnalyticsParams(queryId, params);
+  if (!paramCheck.ok) {
+    return NextResponse.json(
+      { ok: false, error: paramCheck.error },
+      { status: 400 },
+    );
+  }
+
+  const result = await runAnalytics(queryId, paramCheck.data);
 
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 400 });

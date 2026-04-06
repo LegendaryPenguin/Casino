@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Search } from "lucide-react";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { messageFromApiJson } from "@/lib/api-errors";
 
 type Player = {
   PID: number;
@@ -19,6 +20,9 @@ export function PlayersExplorer() {
   const [sortPoints, setSortPoints] = useState<"asc" | "desc">("desc");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [editPid, setEditPid] = useState("");
+  const [newPoints, setNewPoints] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const loadPlayers = useCallback(async () => {
     setLoading(true);
@@ -28,9 +32,9 @@ export function PlayersExplorer() {
     if (search.trim()) params.set("search", search.trim());
     try {
       const res = await fetch(`/api/players?${params.toString()}`);
-      const data = await res.json();
-      if (!data.ok) {
-        toast.error(data.error || "Failed to load players");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        toast.error(messageFromApiJson(res, data));
         setPlayers([]);
         return;
       }
@@ -49,6 +53,39 @@ export function PlayersExplorer() {
 
   const isVip = (p: Player) =>
     p.VIP === true || p.VIP === 1 || Number(p.VIP) === 1;
+
+  async function savePoints() {
+    const pid = Math.floor(Number(editPid));
+    if (!editPid || !Number.isFinite(pid) || pid < 1) {
+      toast.error("Select a player from the list.");
+      return;
+    }
+    const pts = Math.floor(Number(newPoints));
+    if (!Number.isFinite(pts) || pts < 0 || pts > 10_000_000) {
+      toast.error("Points must be an integer from 0 to 10,000,000.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/players/${pid}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ points: pts }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        toast.error(messageFromApiJson(res, data));
+        return;
+      }
+      toast.success(`Updated player ${pid} to ${pts.toLocaleString()} points.`);
+      setNewPoints("");
+      await loadPlayers();
+    } catch {
+      toast.error("Network error while saving.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -86,6 +123,54 @@ export function PlayersExplorer() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+      </GlowCard>
+
+      <GlowCard>
+        <h3 className="font-display text-lg text-[#e8d48b]">
+          Update loyalty points
+        </h3>
+        <p className="mt-1 text-sm text-[#8fa39a]">
+          Uses a DB transaction: <code className="text-[#c9a227]">SET SESSION</code>{" "}
+          isolation, row lock, <code className="text-[#c9a227]">UPDATE</code>, and{" "}
+          <code className="text-[#c9a227]">audit_log</code> insert.
+        </p>
+        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+          <label className="flex min-w-[200px] flex-col gap-1 text-xs text-[#8fa39a]">
+            Player
+            <select
+              className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
+              value={editPid}
+              onChange={(e) => setEditPid(e.target.value)}
+              disabled={players.length === 0}
+            >
+              <option value="">Select…</option>
+              {players.map((p) => (
+                <option key={p.PID} value={String(p.PID)}>
+                  {p.Email} (PID {p.PID})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex max-w-xs flex-col gap-1 text-xs text-[#8fa39a]">
+            New points (0–10,000,000)
+            <input
+              type="number"
+              min={0}
+              max={10_000_000}
+              className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
+              value={newPoints}
+              onChange={(e) => setNewPoints(e.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void savePoints()}
+            disabled={saving}
+            className="rounded-xl border border-[#c9a227]/40 bg-[#c9a227]/15 px-4 py-2 text-sm font-semibold text-[#e8d48b] hover:bg-[#c9a227]/25 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
         </div>
       </GlowCard>
 

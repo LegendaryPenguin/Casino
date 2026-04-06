@@ -6,6 +6,7 @@ import { Play } from "lucide-react";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { DataTable } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { messageFromApiJson } from "@/lib/api-errors";
 
 type AnalyticsQueryId =
   | "casinos_by_location"
@@ -34,13 +35,9 @@ async function runQuery(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ queryId, params }),
   });
-  const data = await res.json();
-  if (!data.ok) {
-    const msg =
-      typeof data.error === "string"
-        ? data.error
-        : JSON.stringify(data.error);
-    throw new Error(msg);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(messageFromApiJson(res, data));
   }
   return data.rows as Record<string, unknown>[];
 }
@@ -186,17 +183,29 @@ export function AnalyticsExplorer() {
   );
 
   const loadMeta = useCallback(async () => {
-    const [c, g, d] = await Promise.all([
-      fetch("/api/casinos/options").then((r) => r.json()),
-      fetch("/api/games/options").then((r) => r.json()),
-      fetch("/api/analytics/defaults").then((r) => r.json()),
+    const [resC, resG, resD] = await Promise.all([
+      fetch("/api/casinos/options"),
+      fetch("/api/games/options"),
+      fetch("/api/analytics/defaults"),
     ]);
-    if (c.ok) {
+    const c = await resC.json().catch(() => ({}));
+    const g = await resG.json().catch(() => ({}));
+    const d = await resD.json().catch(() => ({}));
+
+    if (!resC.ok || !c.ok) {
+      toast.error(messageFromApiJson(resC, c));
+    } else {
       setCasinos(c.casinos);
       setLocations(c.locations);
     }
-    if (g.ok) setGames(g.games);
-    if (d.ok) {
+    if (!resG.ok || !g.ok) {
+      toast.error(messageFromApiJson(resG, g));
+    } else {
+      setGames(g.games);
+    }
+    if (!resD.ok || !d.ok) {
+      toast.error(messageFromApiJson(resD, d));
+    } else if (d.ok) {
       if (d.visitDateMin) setD1(d.visitDateMin);
       if (d.visitDateMax) setD2(d.visitDateMax);
       if (d.suggestedMinPoints != null) {

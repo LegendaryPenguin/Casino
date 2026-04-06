@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listCasinosFiltered } from "@/lib/queries/casinos";
+import {
+  casinosQuerySchema,
+  formatZodError,
+  sanitizeSearch,
+} from "@/lib/validation/schemas";
 
 export async function GET(req: NextRequest) {
-  const sp = req.nextUrl.searchParams;
-  const minCap = sp.get("minCapacity");
-  const minSz = sp.get("minSize");
+  const raw = Object.fromEntries(req.nextUrl.searchParams.entries());
+  const parsed = casinosQuerySchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { ok: false, error: formatZodError(parsed.error) },
+      { status: 400 },
+    );
+  }
 
+  const { search, ...rest } = parsed.data;
   const r = await listCasinosFiltered({
-    location: sp.get("location") ?? undefined,
-    manager: sp.get("manager") ?? undefined,
-    minCapacity: minCap != null && minCap !== "" ? Number(minCap) : undefined,
-    minSize: minSz != null && minSz !== "" ? Number(minSz) : undefined,
-    search: sp.get("search") ?? undefined,
-    sort: sp.get("sort") ?? undefined,
-    order: sp.get("order") === "desc" ? "desc" : "asc",
+    ...rest,
+    search: search ? sanitizeSearch(search) : undefined,
   });
 
   if (!r.ok) {

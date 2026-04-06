@@ -4,6 +4,8 @@
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP VIEW IF EXISTS v_casino_visit_summary;
+DROP TABLE IF EXISTS audit_log;
 DROP TABLE IF EXISTS PLAYS;
 DROP TABLE IF EXISTS VISITS;
 DROP TABLE IF EXISTS OFFERS;
@@ -124,3 +126,26 @@ INSERT INTO PLAYS (PID, GameID) VALUES
 (1003, 105),
 (1004, 101),
 (1004, 103);
+
+-- =========================
+-- Audit log (written by app on UPDATE) + reporting VIEW (grad-team extra)
+-- =========================
+
+CREATE TABLE audit_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    action VARCHAR(64) NOT NULL,
+    entity VARCHAR(64) NOT NULL,
+    entity_id INT NULL,
+    detail VARCHAR(500) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE VIEW v_casino_visit_summary AS
+SELECT
+    c.CID,
+    c.Name,
+    c.Location,
+    COUNT(v.PID) AS visit_count
+FROM CASINO c
+LEFT JOIN VISITS v ON v.CID = c.CID
+GROUP BY c.CID, c.Name, c.Location;

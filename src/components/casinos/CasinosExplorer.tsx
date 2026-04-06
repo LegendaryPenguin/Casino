@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Search } from "lucide-react";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { messageFromApiJson } from "@/lib/api-errors";
 
 type Casino = {
   CID: number;
@@ -38,9 +39,9 @@ export function CasinosExplorer() {
 
   const loadOptions = useCallback(async () => {
     const res = await fetch("/api/casinos/options");
-    const data = await res.json();
-    if (!data.ok) {
-      toast.error(data.error || "Failed to load filter options");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      toast.error(messageFromApiJson(res, data));
       return;
     }
     setLocations(data.locations);
@@ -62,9 +63,9 @@ export function CasinosExplorer() {
 
     try {
       const res = await fetch(`/api/casinos?${params.toString()}`);
-      const data = await res.json();
-      if (!data.ok) {
-        toast.error(data.error || "Failed to load casinos");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        toast.error(messageFromApiJson(res, data));
         setCasinos([]);
         return;
       }
