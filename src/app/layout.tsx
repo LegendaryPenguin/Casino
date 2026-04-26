@@ -18,8 +18,8 @@ const cinzel = Cinzel({
 
 export const metadata: Metadata = {
   title: {
-    default: "Casino Explorer",
-    template: "%s · Casino Explorer",
+    default: "Casino, Inc.",
+    template: "%s · Casino, Inc.",
   },
   description:
     "Browse casinos, games, and players from your MySQL data — premium dashboard experience.",

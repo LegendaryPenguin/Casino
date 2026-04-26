@@ -28,7 +28,7 @@ export function Navbar() {
             <Spade className="h-5 w-5" aria-hidden />
           </span>
           <span className="font-display text-lg font-semibold tracking-wide">
-            Casino<span className="text-white/90"> Explorer</span>
+            Casino<span className="text-white/90">, Inc.</span>
           </span>
         </Link>
 
