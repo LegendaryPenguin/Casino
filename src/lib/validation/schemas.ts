@@ -74,6 +74,25 @@ export const createAccountBodySchema = z.object({
     .max(128, "Password must be 128 characters or fewer"),
 });
 
+export const rouletteBetSchema = z
+  .object({
+    cid: z.coerce.number().int().min(1).max(MAX_INT),
+    bet: z.coerce.number().int().min(1).max(MAX_INT),
+    betType: z.enum(["red", "black", "number"]),
+    betValue: z.coerce.number().int().min(0).max(36).optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.betType === "number") {
+      if (val.betValue === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "betValue is required when betType is 'number'",
+          path: ["betValue"],
+        });
+      }
+    }
+  });
+
 const analyticsLocation = z.object({
   location: z.string().min(1).max(MAX_NAME),
 });

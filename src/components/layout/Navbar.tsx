@@ -42,7 +42,11 @@ export function Navbar({ user }: { user: SessionUser | null }) {
   }
 
   const links = user
-    ? [...navLinks, { href: "/account", label: "Account" }]
+    ? [
+        ...navLinks,
+        { href: "/play", label: "Play" },
+        { href: "/account", label: "Account" },
+      ]
     : [...navLinks, { href: "/signup", label: "Sign Up" }];
 
   return (

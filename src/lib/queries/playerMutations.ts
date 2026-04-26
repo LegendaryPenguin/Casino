@@ -2,6 +2,7 @@
  * Transactional UPDATE on one pooled connection: SET SESSION, read (FOR UPDATE),
  * UPDATE PLAYER, INSERT audit_log — satisfies "session" + "database update" rubric.
  */
+import crypto from "crypto";
 import type { RowDataPacket } from "mysql2/promise";
 import { getPool } from "@/lib/db";
 
@@ -11,6 +12,20 @@ const VIP_UPGRADE_COST = 100;
 const SIGNUP_PID_BASE = 2000;
 
 export const VIP_COST_POINTS = VIP_UPGRADE_COST;
+
+// European single-zero roulette wheel
+const RED_NUMBERS: ReadonlySet<number> = new Set([
+  1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
+]);
+
+export type RouletteBetType = "red" | "black" | "number";
+
+export type RouletteColor = "red" | "black" | "green";
+
+export function rouletteColorFor(n: number): RouletteColor {
+  if (n === 0) return "green";
+  return RED_NUMBERS.has(n) ? "red" : "black";
+}
 
 function rollStartingPoints(): number {
   const span = STARTING_POINTS_MAX - STARTING_POINTS_MIN + 1;
@@ -100,6 +115,50 @@ export async function createPlayerForSignup(
         points: startingPoints,
       },
     };
+  } catch (e) {
+    try {
+      await conn.rollback();
+    } catch {
+      /* ignore */
+    }
+    const message = e instanceof Error ? e.message : "Database error";
+    return { ok: false, error: message };
+  } finally {
+    conn.release();
+  }
+}
+
+/**
+ * Record a digital "visit" to a casino. VISITS is keyed on (PID, CID, Date),
+ * so INSERT IGNORE means the same (player, casino, day) only counts once.
+ * `recorded` indicates whether this call inserted a new row.
+ */
+export async function recordCasinoVisit(
+  pid: number,
+  cid: number,
+): Promise<{ ok: true; recorded: boolean } | { ok: false; error: string }> {
+  const pool = getPool();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [insertRes] = await conn.execute(
+      "INSERT IGNORE INTO VISITS (PID, CID, Date) VALUES (?, ?, CURDATE())",
+      [pid, cid],
+    );
+    const recorded =
+      (insertRes as { affectedRows?: number }).affectedRows === 1;
+
+    if (recorded) {
+      const detail = JSON.stringify({ pid, cid, via: "play_visit" }).slice(0, 500);
+      await conn.execute(
+        "INSERT INTO audit_log (action, entity, entity_id, detail) VALUES (?, ?, ?, ?)",
+        ["RECORD_VISIT", "CASINO", cid, detail],
+      );
+    }
+
+    await conn.commit();
+    return { ok: true, recorded };
   } catch (e) {
     try {
       await conn.rollback();
@@ -278,6 +337,173 @@ export async function updatePlayerPointsWithAudit(
       /* ignore rollback errors */
     }
     const message = e instanceof Error ? e.message : "Database update failed";
+    return { ok: false, error: message };
+  } finally {
+    conn.release();
+  }
+}
+
+export type RouletteBet =
+  | { type: "red" | "black"; amount: number }
+  | { type: "number"; amount: number; value: number };
+
+export type RouletteSpinResult = {
+  pid: number;
+  cid: number;
+  gameId: number;
+  bet: RouletteBet;
+  spin: { number: number; color: RouletteColor };
+  win: boolean;
+  delta: number;
+  pointsBefore: number;
+  pointsAfter: number;
+  firstPlay: boolean;
+};
+
+/**
+ * Single-transaction roulette spin:
+ *   - Lock the PLAYER row (FOR UPDATE), verify balance vs MinBet/MaxBet from
+ *     OFFERS for (CID, ROULETTE_GAME_ID).
+ *   - Roll a 0..36 winning number using crypto.randomInt.
+ *   - Deduct the bet, add winnings on win, UPDATE PLAYER.Points.
+ *   - INSERT IGNORE INTO PLAYS so first-time roulette plays are recorded.
+ *   - Audit row in audit_log.
+ *
+ * Payouts: red/black = 1:1, single number = 35:1 (European wheel).
+ */
+export async function playRouletteAtCasino(
+  pid: number,
+  cid: number,
+  gameId: number,
+  bet: RouletteBet,
+): Promise<
+  | { ok: true; result: RouletteSpinResult }
+  | { ok: false; error: string }
+> {
+  if (!Number.isInteger(bet.amount) || bet.amount < 1) {
+    return { ok: false, error: "Bet amount must be a positive integer." };
+  }
+  if (bet.type === "number") {
+    if (!Number.isInteger(bet.value) || bet.value < 0 || bet.value > 36) {
+      return { ok: false, error: "Number bets must be between 0 and 36." };
+    }
+  }
+
+  const pool = getPool();
+  const conn = await pool.getConnection();
+  try {
+    await conn.query(
+      "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED",
+    );
+    await conn.beginTransaction();
+
+    const [offerRows] = await conn.execute<RowDataPacket[]>(
+      `SELECT MinBet, MaxBet
+       FROM OFFERS
+       WHERE CID = ? AND GameID = ?`,
+      [cid, gameId],
+    );
+    if (offerRows.length === 0) {
+      await conn.rollback();
+      return {
+        ok: false,
+        error: "This casino does not offer this game.",
+      };
+    }
+    const minBet = Math.ceil(Number(offerRows[0].MinBet));
+    const maxBet = Math.floor(Number(offerRows[0].MaxBet));
+    if (bet.amount < minBet || bet.amount > maxBet) {
+      await conn.rollback();
+      return {
+        ok: false,
+        error: `Bet must be between ${minBet} and ${maxBet} at this table.`,
+      };
+    }
+
+    const [playerRows] = await conn.execute<RowDataPacket[]>(
+      "SELECT Points FROM PLAYER WHERE PID = ? FOR UPDATE",
+      [pid],
+    );
+    if (playerRows.length === 0) {
+      await conn.rollback();
+      return { ok: false, error: `No player found with PID ${pid}.` };
+    }
+    const pointsBefore = Number(playerRows[0].Points);
+    if (pointsBefore < bet.amount) {
+      await conn.rollback();
+      return {
+        ok: false,
+        error: `You don't have enough points (have ${pointsBefore}, need ${bet.amount}).`,
+      };
+    }
+
+    const winningNumber = crypto.randomInt(0, 37);
+    const winningColor = rouletteColorFor(winningNumber);
+
+    let win = false;
+    let delta = -bet.amount;
+    if (bet.type === "number") {
+      if (winningNumber === bet.value) {
+        win = true;
+        delta = bet.amount * 35;
+      }
+    } else if (winningColor === bet.type) {
+      win = true;
+      delta = bet.amount;
+    }
+
+    const pointsAfter = pointsBefore + delta;
+
+    await conn.execute(
+      "UPDATE PLAYER SET Points = ? WHERE PID = ?",
+      [pointsAfter, pid],
+    );
+
+    const [insertRes] = await conn.execute(
+      "INSERT IGNORE INTO PLAYS (PID, GameID) VALUES (?, ?)",
+      [pid, gameId],
+    );
+    const firstPlay =
+      (insertRes as { affectedRows?: number }).affectedRows === 1;
+
+    const detail = JSON.stringify({
+      cid,
+      gameId,
+      bet,
+      spin: { number: winningNumber, color: winningColor },
+      win,
+      delta,
+      pointsBefore,
+      pointsAfter,
+    }).slice(0, 500);
+    await conn.execute(
+      "INSERT INTO audit_log (action, entity, entity_id, detail) VALUES (?, ?, ?, ?)",
+      ["PLAY_ROULETTE", "PLAYER", pid, detail],
+    );
+
+    await conn.commit();
+    return {
+      ok: true,
+      result: {
+        pid,
+        cid,
+        gameId,
+        bet,
+        spin: { number: winningNumber, color: winningColor },
+        win,
+        delta,
+        pointsBefore,
+        pointsAfter,
+        firstPlay,
+      },
+    };
+  } catch (e) {
+    try {
+      await conn.rollback();
+    } catch {
+      /* ignore */
+    }
+    const message = e instanceof Error ? e.message : "Database error";
     return { ok: false, error: message };
   } finally {
     conn.release();
