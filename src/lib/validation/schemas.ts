@@ -65,6 +65,15 @@ export const patchPlayerPointsBodySchema = z.object({
   points: z.coerce.number().int().min(0).max(10_000_000),
 });
 
+export const createAccountBodySchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(MAX_NAME),
+  email: z.string().trim().email("Use a valid email").max(MAX_NAME),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Password must be 128 characters or fewer"),
+});
+
 const analyticsLocation = z.object({
   location: z.string().min(1).max(MAX_NAME),
 });
