@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { Crown, Gem, Mail, Sparkles, Hash } from "lucide-react";
 import { GlowCard } from "@/components/ui/GlowCard";
 import { BecomeVipButton } from "@/components/account/BecomeVipButton";
+import { MyActivity } from "@/components/account/MyActivity";
 import { getUserBySessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 import {
   getPlayerByPid,
@@ -133,6 +134,12 @@ export default async function AccountPage() {
             </div>
           </GlowCard>
         </div>
+
+        {player !== null ? (
+          <section className="mt-10">
+            <MyActivity />
+          </section>
+        ) : null}
       </div>
     </div>
   );

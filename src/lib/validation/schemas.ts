@@ -55,6 +55,30 @@ export const gamesQuerySchema = z.object({
   ),
 });
 
+export const accountActivityQuerySchema = z
+  .object({
+    startDate: z.preprocess(
+      emptyToUndef,
+      z.string().regex(ISO_DATE, "Use YYYY-MM-DD").optional(),
+    ),
+    endDate: z.preprocess(
+      emptyToUndef,
+      z.string().regex(ISO_DATE, "Use YYYY-MM-DD").optional(),
+    ),
+    cid: z.preprocess((v) => {
+      const u = emptyToUndef(v);
+      if (u === undefined) return undefined;
+      const n = Number(u);
+      if (!Number.isFinite(n) || !Number.isInteger(n)) return NaN;
+      return n;
+    }, z.number().int().min(1).max(MAX_INT).optional()),
+  })
+  .refine(
+    (d) =>
+      !d.startDate || !d.endDate || d.startDate <= d.endDate,
+    { message: "startDate must be on or before endDate" },
+  );
+
 const posInt = z.preprocess((v) => {
   const n = Number(v);
   if (!Number.isFinite(n) || !Number.isInteger(n)) return NaN;
