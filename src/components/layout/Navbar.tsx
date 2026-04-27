@@ -9,7 +9,6 @@ import type { SessionUser } from "@/lib/auth";
 
 const navLinks = [
   { href: "/", label: "Home" },
-  { href: "/casinos", label: "Casinos" },
   { href: "/games", label: "Games" },
   { href: "/players", label: "Players" },
   { href: "/analytics", label: "Analytics" },

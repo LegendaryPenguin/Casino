@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { name, email, password } = parsed.data;
+  const { name, email } = parsed.data;
   const normalizedEmail = email.trim().toLowerCase();
 
   // Roll a starting balance / link to an existing PLAYER row before we commit
@@ -46,7 +46,6 @@ export async function POST(req: NextRequest) {
   const accountResult = createAccount({
     name,
     email,
-    password,
     playerPid: playerResult.player.pid,
   });
   if (!accountResult.ok) {

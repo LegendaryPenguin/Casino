@@ -21,7 +21,6 @@ export function SignupForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [reveal, setReveal] = useState<RevealState | null>(null);
 
@@ -34,7 +33,7 @@ export function SignupForm() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
@@ -115,21 +114,6 @@ export function SignupForm() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="jane@example.com"
             autoComplete="email"
-          />
-        </label>
-
-        <label className="flex flex-col gap-1 text-xs text-[#8fa39a]">
-          Password
-          <input
-            className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white placeholder:text-[#5c6b64]"
-            maxLength={128}
-            minLength={8}
-            required
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 8 characters"
-            autoComplete="new-password"
           />
         </label>
 

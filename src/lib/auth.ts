@@ -14,9 +14,6 @@ export const SESSION_COOKIE_NAME = "casino_session";
 
 const SESSION_DAYS = 7;
 const SESSION_MAX_AGE_SECONDS = SESSION_DAYS * 24 * 60 * 60;
-const PBKDF2_ITERATIONS = 120_000;
-const PBKDF2_KEY_LENGTH = 32;
-const PBKDF2_DIGEST = "sha256";
 
 export type SessionUser = {
   id: number;
@@ -25,10 +22,7 @@ export type SessionUser = {
   playerPid: number | null;
 };
 
-type StoredUser = SessionUser & {
-  passwordSalt: Buffer;
-  passwordHash: Buffer;
-};
+type StoredUser = SessionUser;
 
 type StoredSession = {
   userId: number;
@@ -62,21 +56,6 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function hashPassword(password: string, salt: Buffer): Buffer {
-  return crypto.pbkdf2Sync(
-    password,
-    salt,
-    PBKDF2_ITERATIONS,
-    PBKDF2_KEY_LENGTH,
-    PBKDF2_DIGEST,
-  );
-}
-
-function timingSafeEqual(a: Buffer, b: Buffer): boolean {
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
-}
-
 function hashSessionToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
@@ -102,7 +81,6 @@ export function sessionCookieOptions(expires: Date) {
 export type CreateAccountInput = {
   name: string;
   email: string;
-  password: string;
   playerPid?: number | null;
 };
 
@@ -134,16 +112,11 @@ export function createAccount(
     return { ok: false, error: "An account with that email already exists." };
   }
 
-  const salt = crypto.randomBytes(16);
-  const passwordHash = hashPassword(input.password, salt);
-
   const user: StoredUser = {
     id: store.nextUserId++,
     name,
     email,
     playerPid: input.playerPid ?? null,
-    passwordSalt: salt,
-    passwordHash,
   };
   store.users.set(email, user);
 
@@ -166,17 +139,6 @@ export function setUserPlayerPid(userId: number, pid: number): void {
       return;
     }
   }
-}
-
-export function verifyCredentials(
-  email: string,
-  password: string,
-): SessionUser | null {
-  const user = getStore().users.get(normalizeEmail(email));
-  if (!user) return null;
-  const candidate = hashPassword(password, user.passwordSalt);
-  if (!timingSafeEqual(candidate, user.passwordHash)) return null;
-  return publicUser(user);
 }
 
 export function createSessionForUser(userId: number): {

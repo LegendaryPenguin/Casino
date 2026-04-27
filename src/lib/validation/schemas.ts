@@ -68,10 +68,6 @@ export const patchPlayerPointsBodySchema = z.object({
 export const createAccountBodySchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(MAX_NAME),
   email: z.string().trim().email("Use a valid email").max(MAX_NAME),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .max(128, "Password must be 128 characters or fewer"),
 });
 
 export const rouletteBetSchema = z
@@ -99,13 +95,6 @@ const analyticsLocation = z.object({
 const analyticsCid = z.object({ cid: posInt });
 const analyticsGameId = z.object({ gameId: posInt });
 const analyticsCidGame = z.object({ cid: posInt, gameId: posInt });
-const analyticsMinPoints = z.object({
-  minPoints: z.preprocess((v) => {
-    const n = Number(v);
-    if (!Number.isFinite(n) || !Number.isInteger(n)) return NaN;
-    return n;
-  }, z.number().int().min(0).max(MAX_INT)),
-});
 const analyticsDates = z
   .object({
     startDate: z.string().regex(ISO_DATE, "Use YYYY-MM-DD"),
@@ -153,10 +142,10 @@ const analyticsParamParsers: Record<
   games_by_casino: analyticsCid,
   casinos_by_game: analyticsGameId,
   players_visited_casino: analyticsCid,
-  players_above_points: analyticsMinPoints,
+  players_played_at_casino: analyticsCidGame,
   visits_between_dates: analyticsDates,
   casinos_above_capacity: analyticsMinCap,
-  active_tables_casino_game: analyticsCidGame,
+  players_by_visits: analyticsEmpty,
   card_games: analyticsEmpty,
   table_games: analyticsEmpty,
   most_visited_casino: analyticsEmpty,
