@@ -9,19 +9,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { messageFromApiJson } from "@/lib/api-errors";
 
 type AnalyticsQueryId =
-  | "casinos_by_location"
-  | "vip_players"
-  | "games_by_casino"
   | "casinos_by_game"
   | "players_visited_casino"
-  | "players_above_points"
-  | "visits_between_dates"
-  | "casinos_above_capacity"
-  | "active_tables_casino_game"
-  | "card_games"
-  | "table_games"
-  | "most_visited_casino"
-  | "top_players_by_points";
+  | "players_played_at_casino"
+  | "players_by_visits";
 
 type OptionCasino = { CID: number; Name: string };
 type OptionGame = { GameID: number; Name: string };
@@ -103,25 +94,8 @@ function QueryBlock({
 export function AnalyticsExplorer() {
   const [casinos, setCasinos] = useState<OptionCasino[]>([]);
   const [games, setGames] = useState<OptionGame[]>([]);
-  const [locations, setLocations] = useState<string[]>([]);
 
   const [runningKey, setRunningKey] = useState<string | null>(null);
-
-  const [rLocation, setRLocation] = useState("");
-  const [rowsLocation, setRowsLocation] = useState<Record<
-    string,
-    unknown
-  >[] | null>(null);
-
-  const [rowsVip, setRowsVip] = useState<Record<string, unknown>[] | null>(
-    null,
-  );
-
-  const [cidGames, setCidGames] = useState("");
-  const [rowsGamesCasino, setRowsGamesCasino] = useState<Record<
-    string,
-    unknown
-  >[] | null>(null);
 
   const [gidCasinos, setGidCasinos] = useState("");
   const [rowsCasinosGame, setRowsCasinosGame] = useState<Record<
@@ -135,94 +109,35 @@ export function AnalyticsExplorer() {
     unknown
   >[] | null>(null);
 
-  const [minPoints, setMinPoints] = useState("");
-  const [rowsPoints, setRowsPoints] = useState<Record<
+  const [cidPlayed, setCidPlayed] = useState("");
+  const [gidPlayed, setGidPlayed] = useState("");
+  const [rowsPlayed, setRowsPlayed] = useState<Record<
     string,
     unknown
   >[] | null>(null);
 
-  const [d1, setD1] = useState("");
-  const [d2, setD2] = useState("");
-  const [rowsVisits, setRowsVisits] = useState<Record<
+  const [rowsPlayerRanking, setRowsPlayerRanking] = useState<Record<
     string,
     unknown
   >[] | null>(null);
-
-  const [minCap, setMinCap] = useState("");
-  const [rowsCap, setRowsCap] = useState<Record<string, unknown>[] | null>(
-    null,
-  );
-
-  const [cidAct, setCidAct] = useState("");
-  const [gidAct, setGidAct] = useState("");
-  const [rowsAct, setRowsAct] = useState<Record<string, unknown>[] | null>(
-    null,
-  );
-
-  const [rowsCard, setRowsCard] = useState<Record<string, unknown>[] | null>(
-    null,
-  );
-  const [rowsTable, setRowsTable] = useState<Record<string, unknown>[] | null>(
-    null,
-  );
-  const [rowsMost, setRowsMost] = useState<Record<string, unknown>[] | null>(
-    null,
-  );
-
-  const [topLimit, setTopLimit] = useState("");
-  const [rowsTop, setRowsTop] = useState<Record<string, unknown>[] | null>(
-    null,
-  );
-
-  const [pointsRange, setPointsRange] = useState<{
-    min: number;
-    max: number;
-  } | null>(null);
-  const [capRange, setCapRange] = useState<{ min: number; max: number } | null>(
-    null,
-  );
 
   const loadMeta = useCallback(async () => {
-    const [resC, resG, resD] = await Promise.all([
+    const [resC, resG] = await Promise.all([
       fetch("/api/casinos/options"),
       fetch("/api/games/options"),
-      fetch("/api/analytics/defaults"),
     ]);
     const c = await resC.json().catch(() => ({}));
     const g = await resG.json().catch(() => ({}));
-    const d = await resD.json().catch(() => ({}));
 
     if (!resC.ok || !c.ok) {
       toast.error(messageFromApiJson(resC, c));
     } else {
       setCasinos(c.casinos);
-      setLocations(c.locations);
     }
     if (!resG.ok || !g.ok) {
       toast.error(messageFromApiJson(resG, g));
     } else {
       setGames(g.games);
-    }
-    if (!resD.ok || !d.ok) {
-      toast.error(messageFromApiJson(resD, d));
-    } else if (d.ok) {
-      if (d.visitDateMin) setD1(d.visitDateMin);
-      if (d.visitDateMax) setD2(d.visitDateMax);
-      if (d.suggestedMinPoints != null) {
-        setMinPoints(String(d.suggestedMinPoints));
-      }
-      if (d.suggestedMinCapacity != null) {
-        setMinCap(String(d.suggestedMinCapacity));
-      }
-      if (d.playerCount != null && d.playerCount >= 1) {
-        setTopLimit(String(d.playerCount));
-      }
-      if (d.pointsMin != null && d.pointsMax != null) {
-        setPointsRange({ min: d.pointsMin, max: d.pointsMax });
-      }
-      if (d.casinoCapacityMin != null && d.casinoCapacityMax != null) {
-        setCapRange({ min: d.casinoCapacityMin, max: d.casinoCapacityMax });
-      }
     }
   }, []);
 
@@ -250,73 +165,6 @@ export function AnalyticsExplorer() {
 
   return (
     <div className="space-y-10">
-      <QueryBlock
-        title="Casinos in a location"
-        description="Filter casinos by city or region."
-        running={runningKey === "loc"}
-        rows={rowsLocation}
-        onRun={() =>
-          run("loc", "casinos_by_location", { location: rLocation }, (r) =>
-            setRowsLocation(r),
-          )
-        }
-      >
-        <label className="flex max-w-md flex-col gap-1 text-xs text-[#8fa39a]">
-          Location
-          <select
-            className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-            value={rLocation}
-            onChange={(e) => setRLocation(e.target.value)}
-          >
-            <option value="">Select…</option>
-            {locations.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </label>
-      </QueryBlock>
-
-      <QueryBlock
-        title="All VIP players"
-        running={runningKey === "vip"}
-        rows={rowsVip}
-        onRun={() => run("vip", "vip_players", {}, (r) => setRowsVip(r))}
-      >
-        <p className="text-sm text-[#8fa39a]">No parameters required.</p>
-      </QueryBlock>
-
-      <QueryBlock
-        title="Games offered by a casino"
-        running={runningKey === "gc"}
-        rows={rowsGamesCasino}
-        onRun={() =>
-          run(
-            "gc",
-            "games_by_casino",
-            { cid: Number(cidGames) },
-            (r) => setRowsGamesCasino(r),
-          )
-        }
-      >
-        <label className="flex max-w-md flex-col gap-1 text-xs text-[#8fa39a]">
-          Casino
-          <select
-            className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-            value={cidGames}
-            onChange={(e) => setCidGames(e.target.value)}
-          >
-            <option value="">Select…</option>
-            {casinos.map((c) => (
-              <option key={c.CID} value={c.CID}>
-                {c.Name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </QueryBlock>
-
       <QueryBlock
         title="Casinos offering a game"
         running={runningKey === "cg"}
@@ -378,119 +226,16 @@ export function AnalyticsExplorer() {
       </QueryBlock>
 
       <QueryBlock
-        title="Players above points threshold"
-        running={runningKey === "pp"}
-        rows={rowsPoints}
+        title="Players who played a game at a casino"
+        description="Joins PLAYER ⨝ PLAYS ⨝ GAMES ⨝ VISITS ⨝ CASINO. Returns players who have a PLAYS row for the chosen game and a VISITS row for the chosen casino."
+        running={runningKey === "pgc"}
+        rows={rowsPlayed}
         onRun={() =>
           run(
-            "pp",
-            "players_above_points",
-            { minPoints: Number(minPoints) },
-            (r) => setRowsPoints(r),
-          )
-        }
-      >
-        <div className="space-y-2">
-          <label className="flex max-w-xs flex-col gap-1 text-xs text-[#8fa39a]">
-            Minimum points (exclusive)
-            <input
-              type="number"
-              className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-              value={minPoints}
-              onChange={(e) => setMinPoints(e.target.value)}
-            />
-          </label>
-          {pointsRange ? (
-            <p className="text-xs text-[#6b7f76]">
-              PLAYER.Points in your DB: {pointsRange.min.toLocaleString()}–
-              {pointsRange.max.toLocaleString()}
-            </p>
-          ) : null}
-        </div>
-      </QueryBlock>
-
-      <QueryBlock
-        title="Visits between two dates"
-        running={runningKey === "vd"}
-        rows={rowsVisits}
-        onRun={() =>
-          run(
-            "vd",
-            "visits_between_dates",
-            { startDate: d1, endDate: d2 },
-            (r) => setRowsVisits(r),
-          )
-        }
-      >
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-4">
-            <label className="flex flex-col gap-1 text-xs text-[#8fa39a]">
-              Start
-              <input
-                type="date"
-                className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-                value={d1}
-                onChange={(e) => setD1(e.target.value)}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-[#8fa39a]">
-              End
-              <input
-                type="date"
-                className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-                value={d2}
-                onChange={(e) => setD2(e.target.value)}
-              />
-            </label>
-          </div>
-          <p className="text-xs text-[#6b7f76]">
-            Defaults load from MIN/MAX(VISITS.Date) in your database.
-          </p>
-        </div>
-      </QueryBlock>
-
-      <QueryBlock
-        title="Casinos with capacity above threshold"
-        running={runningKey === "cap"}
-        rows={rowsCap}
-        onRun={() =>
-          run(
-            "cap",
-            "casinos_above_capacity",
-            { minCapacity: Number(minCap) },
-            (r) => setRowsCap(r),
-          )
-        }
-      >
-        <div className="space-y-2">
-          <label className="flex max-w-xs flex-col gap-1 text-xs text-[#8fa39a]">
-            Minimum capacity (exclusive)
-            <input
-              type="number"
-              className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-              value={minCap}
-              onChange={(e) => setMinCap(e.target.value)}
-            />
-          </label>
-          {capRange ? (
-            <p className="text-xs text-[#6b7f76]">
-              CASINO.Capacity in your DB: {capRange.min.toLocaleString()}–
-              {capRange.max.toLocaleString()}
-            </p>
-          ) : null}
-        </div>
-      </QueryBlock>
-
-      <QueryBlock
-        title="Active tables for casino + game"
-        running={runningKey === "act"}
-        rows={rowsAct}
-        onRun={() =>
-          run(
-            "act",
-            "active_tables_casino_game",
-            { cid: Number(cidAct), gameId: Number(gidAct) },
-            (r) => setRowsAct(r),
+            "pgc",
+            "players_played_at_casino",
+            { cid: Number(cidPlayed), gameId: Number(gidPlayed) },
+            (r) => setRowsPlayed(r),
           )
         }
       >
@@ -499,8 +244,8 @@ export function AnalyticsExplorer() {
             Casino
             <select
               className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-              value={cidAct}
-              onChange={(e) => setCidAct(e.target.value)}
+              value={cidPlayed}
+              onChange={(e) => setCidPlayed(e.target.value)}
             >
               <option value="">Select…</option>
               {casinos.map((c) => (
@@ -514,8 +259,8 @@ export function AnalyticsExplorer() {
             Game
             <select
               className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-              value={gidAct}
-              onChange={(e) => setGidAct(e.target.value)}
+              value={gidPlayed}
+              onChange={(e) => setGidPlayed(e.target.value)}
             >
               <option value="">Select…</option>
               {games.map((g) => (
@@ -529,70 +274,15 @@ export function AnalyticsExplorer() {
       </QueryBlock>
 
       <QueryBlock
-        title="All card games"
-        running={runningKey === "card"}
-        rows={rowsCard}
+        title="Players ranked by visits"
+        description="LEFT JOIN of PLAYER ⨝ VISITS, grouped by player. Ranks every player by their total visit count (players with zero visits appear last)."
+        running={runningKey === "pr"}
+        rows={rowsPlayerRanking}
         onRun={() =>
-          run("card", "card_games", {}, (r) => setRowsCard(r))
+          run("pr", "players_by_visits", {}, (r) => setRowsPlayerRanking(r))
         }
       >
-        <p className="text-sm text-[#8fa39a]">Category = Card</p>
-      </QueryBlock>
-
-      <QueryBlock
-        title="All table games"
-        running={runningKey === "tbl"}
-        rows={rowsTable}
-        onRun={() =>
-          run("tbl", "table_games", {}, (r) => setRowsTable(r))
-        }
-      >
-        <p className="text-sm text-[#8fa39a]">Category = Table</p>
-      </QueryBlock>
-
-      <QueryBlock
-        title="Most visited casino"
-        running={runningKey === "mvc"}
-        rows={rowsMost}
-        onRun={() =>
-          run("mvc", "most_visited_casino", {}, (r) => setRowsMost(r))
-        }
-      >
-        <p className="text-sm text-[#8fa39a]">
-          Single row with highest visit count.
-        </p>
-      </QueryBlock>
-
-      <QueryBlock
-        title="Top players by points"
-        running={runningKey === "top"}
-        rows={rowsTop}
-        onRun={() => {
-          const p: Record<string, unknown> = {};
-          if (topLimit.trim() !== "") {
-            const n = Math.floor(Number(topLimit));
-            if (n >= 1) p.limit = Math.min(1000, n);
-          }
-          run("top", "top_players_by_points", p, (r) => setRowsTop(r));
-        }}
-      >
-        <div className="space-y-2">
-          <label className="flex max-w-xs flex-col gap-1 text-xs text-[#8fa39a]">
-            Limit (optional)
-            <input
-              type="number"
-              min={1}
-              max={1000}
-              className="rounded-lg border border-white/10 bg-[#050807] px-3 py-2 text-sm text-white"
-              value={topLimit}
-              onChange={(e) => setTopLimit(e.target.value)}
-            />
-          </label>
-          <p className="text-xs text-[#6b7f76]">
-            Blank = all players (ORDER BY Points DESC). If set, capped at 1000 rows
-            for safety.
-          </p>
-        </div>
+        <p className="text-xs text-[#5c6b64]">No parameters — runs against all players.</p>
       </QueryBlock>
     </div>
   );

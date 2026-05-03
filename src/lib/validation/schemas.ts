@@ -55,6 +55,30 @@ export const gamesQuerySchema = z.object({
   ),
 });
 
+export const accountActivityQuerySchema = z
+  .object({
+    startDate: z.preprocess(
+      emptyToUndef,
+      z.string().regex(ISO_DATE, "Use YYYY-MM-DD").optional(),
+    ),
+    endDate: z.preprocess(
+      emptyToUndef,
+      z.string().regex(ISO_DATE, "Use YYYY-MM-DD").optional(),
+    ),
+    cid: z.preprocess((v) => {
+      const u = emptyToUndef(v);
+      if (u === undefined) return undefined;
+      const n = Number(u);
+      if (!Number.isFinite(n) || !Number.isInteger(n)) return NaN;
+      return n;
+    }, z.number().int().min(1).max(MAX_INT).optional()),
+  })
+  .refine(
+    (d) =>
+      !d.startDate || !d.endDate || d.startDate <= d.endDate,
+    { message: "startDate must be on or before endDate" },
+  );
+
 const posInt = z.preprocess((v) => {
   const n = Number(v);
   if (!Number.isFinite(n) || !Number.isInteger(n)) return NaN;
@@ -65,19 +89,36 @@ export const patchPlayerPointsBodySchema = z.object({
   points: z.coerce.number().int().min(0).max(10_000_000),
 });
 
+export const createAccountBodySchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(MAX_NAME),
+  email: z.string().trim().email("Use a valid email").max(MAX_NAME),
+});
+
+export const rouletteBetSchema = z
+  .object({
+    cid: z.coerce.number().int().min(1).max(MAX_INT),
+    bet: z.coerce.number().int().min(1).max(MAX_INT),
+    betType: z.enum(["red", "black", "number"]),
+    betValue: z.coerce.number().int().min(0).max(36).optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.betType === "number") {
+      if (val.betValue === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "betValue is required when betType is 'number'",
+          path: ["betValue"],
+        });
+      }
+    }
+  });
+
 const analyticsLocation = z.object({
   location: z.string().min(1).max(MAX_NAME),
 });
 const analyticsCid = z.object({ cid: posInt });
 const analyticsGameId = z.object({ gameId: posInt });
 const analyticsCidGame = z.object({ cid: posInt, gameId: posInt });
-const analyticsMinPoints = z.object({
-  minPoints: z.preprocess((v) => {
-    const n = Number(v);
-    if (!Number.isFinite(n) || !Number.isInteger(n)) return NaN;
-    return n;
-  }, z.number().int().min(0).max(MAX_INT)),
-});
 const analyticsDates = z
   .object({
     startDate: z.string().regex(ISO_DATE, "Use YYYY-MM-DD"),
@@ -125,10 +166,10 @@ const analyticsParamParsers: Record<
   games_by_casino: analyticsCid,
   casinos_by_game: analyticsGameId,
   players_visited_casino: analyticsCid,
-  players_above_points: analyticsMinPoints,
+  players_played_at_casino: analyticsCidGame,
   visits_between_dates: analyticsDates,
   casinos_above_capacity: analyticsMinCap,
-  active_tables_casino_game: analyticsCidGame,
+  players_by_visits: analyticsEmpty,
   card_games: analyticsEmpty,
   table_games: analyticsEmpty,
   most_visited_casino: analyticsEmpty,

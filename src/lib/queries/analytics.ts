@@ -8,10 +8,10 @@ export type AnalyticsQueryId =
   | "games_by_casino"
   | "casinos_by_game"
   | "players_visited_casino"
-  | "players_above_points"
+  | "players_played_at_casino"
   | "visits_between_dates"
   | "casinos_above_capacity"
-  | "active_tables_casino_game"
+  | "players_by_visits"
   | "card_games"
   | "table_games"
   | "most_visited_casino"
@@ -95,13 +95,32 @@ export async function runAnalytics(
       );
       return r.ok ? { ok: true, rows: r.data } : { ok: false, error: r.error };
     }
-    case "players_above_points": {
-      const minPoints = Number(params.minPoints);
-      if (!Number.isFinite(minPoints))
-        return { ok: false, error: "minPoints is required" };
-      const r = await queryRows<PlayerRow[]>(
-        `SELECT PID, Email, VIP, Points FROM PLAYER WHERE Points > ? ORDER BY Points DESC`,
-        [minPoints],
+    case "players_played_at_casino": {
+      // Players who have a row in PLAYS for the chosen game AND a row in
+      // VISITS for the chosen casino. Joins PLAYER ⨝ PLAYS ⨝ GAMES ⨝ VISITS
+      // ⨝ CASINO so we can also surface the game and casino name.
+      const cid = Number(params.cid);
+      const gameId = Number(params.gameId);
+      if (!Number.isFinite(cid) || !Number.isFinite(gameId))
+        return { ok: false, error: "cid and gameId are required" };
+      const r = await queryRows<
+        (PlayerRow & { GameName: string; CasinoName: string })[]
+      >(
+        `SELECT DISTINCT
+            p.PID,
+            p.Email,
+            p.VIP,
+            p.Points,
+            g.Name AS GameName,
+            c.Name AS CasinoName
+         FROM PLAYER p
+         JOIN PLAYS  pl ON pl.PID = p.PID
+         JOIN GAMES  g  ON g.GameID = pl.GameID
+         JOIN VISITS v  ON v.PID = p.PID
+         JOIN CASINO c  ON c.CID = v.CID
+         WHERE pl.GameID = ? AND v.CID = ?
+         ORDER BY p.Email`,
+        [gameId, cid],
       );
       return r.ok ? { ok: true, rows: r.data } : { ok: false, error: r.error };
     }
@@ -133,18 +152,25 @@ export async function runAnalytics(
       );
       return r.ok ? { ok: true, rows: r.data } : { ok: false, error: r.error };
     }
-    case "active_tables_casino_game": {
-      const cid = Number(params.cid);
-      const gameId = Number(params.gameId);
-      if (!Number.isFinite(cid) || !Number.isFinite(gameId))
-        return { ok: false, error: "cid and gameId are required" };
-      const r = await queryRows<RowDataPacket[]>(
-        `SELECT o.CID, c.Name AS CasinoName, o.GameID, g.Name AS GameName, o.ActiveTables, o.MinBet, o.MaxBet
-         FROM OFFERS o
-         JOIN CASINO c ON c.CID = o.CID
-         JOIN GAMES g ON g.GameID = o.GameID
-         WHERE o.CID = ? AND o.GameID = ?`,
-        [cid, gameId],
+    case "players_by_visits": {
+      // Rank every player by how many times they appear in VISITS. LEFT JOIN
+      // so players with zero visits still show up (ranked last). RANK() gives
+      // ties the same rank, which matches the "ranking" intent better than a
+      // plain row number.
+      const r = await queryRows<
+        (PlayerRow & { Rank: number; Visits: number })[]
+      >(
+        `SELECT
+            RANK() OVER (ORDER BY COUNT(v.PID) DESC) AS \`Rank\`,
+            p.PID,
+            p.Email,
+            p.VIP,
+            p.Points,
+            COUNT(v.PID) AS Visits
+         FROM PLAYER p
+         LEFT JOIN VISITS v ON v.PID = p.PID
+         GROUP BY p.PID, p.Email, p.VIP, p.Points
+         ORDER BY Visits DESC, p.Email`,
       );
       return r.ok ? { ok: true, rows: r.data } : { ok: false, error: r.error };
     }
