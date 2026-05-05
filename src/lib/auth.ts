@@ -1,12 +1,9 @@
 /**
- * Simple in-memory auth + session store for the Casino demo.
+ * Signed cookie auth for the Casino demo.
  *
- * Designed for the EECS 447 demo where only a handful of users sign up.
- * No database tables are required: users and sessions live in process memory
- * and are reset whenever the dev server restarts.
- *
- * Sessions are tracked with an httpOnly cookie holding an opaque token. The
- * token itself is never persisted; we store its SHA-256 hash in memory.
+ * Vercel serverless functions cannot rely on process memory being shared
+ * between requests, so the session payload is stored in an httpOnly cookie and
+ * signed with an HMAC. Any function can validate the cookie independently.
  */
 import crypto from "crypto";
 
@@ -14,6 +11,7 @@ export const SESSION_COOKIE_NAME = "casino_session";
 
 const SESSION_DAYS = 7;
 const SESSION_MAX_AGE_SECONDS = SESSION_DAYS * 24 * 60 * 60;
+const SESSION_VERSION = 1;
 
 export type SessionUser = {
   id: number;
@@ -24,47 +22,59 @@ export type SessionUser = {
 
 type StoredUser = SessionUser;
 
-type StoredSession = {
-  userId: number;
-  expiresAt: number;
+type SessionPayload = SessionUser & {
+  v: typeof SESSION_VERSION;
+  exp: number;
+  nonce: string;
 };
-
-declare global {
-  // Persist across Next.js HMR reloads in dev so signed-in users don't lose
-  // their session every time a file is edited.
-  var __casino_auth_store:
-    | {
-        users: Map<string, StoredUser>;
-        sessions: Map<string, StoredSession>;
-        nextUserId: number;
-      }
-    | undefined;
-}
-
-function getStore() {
-  if (!globalThis.__casino_auth_store) {
-    globalThis.__casino_auth_store = {
-      users: new Map(),
-      sessions: new Map(),
-      nextUserId: 1,
-    };
-  }
-  return globalThis.__casino_auth_store;
-}
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function hashSessionToken(token: string): string {
-  return crypto.createHash("sha256").update(token).digest("hex");
+function fallbackSecret(): string {
+  const parts = [
+    process.env.DB_HOST,
+    process.env.DB_NAME,
+    process.env.DB_USER,
+    process.env.DB_PASSWORD,
+  ].filter(Boolean);
+
+  if (parts.length > 0) {
+    return parts.join(":");
+  }
+
+  return "casino-demo-session-secret";
 }
 
-function pruneExpiredSessions(now = Date.now()) {
-  const { sessions } = getStore();
-  for (const [hash, session] of sessions) {
-    if (session.expiresAt <= now) sessions.delete(hash);
-  }
+function authSecret(): string {
+  return process.env.AUTH_SECRET?.trim() || fallbackSecret();
+}
+
+function toBase64Url(value: string | Buffer): string {
+  return Buffer.from(value).toString("base64url");
+}
+
+function fromBase64Url(value: string): string {
+  return Buffer.from(value, "base64url").toString("utf8");
+}
+
+function sign(value: string): string {
+  return crypto
+    .createHmac("sha256", authSecret())
+    .update(value)
+    .digest("base64url");
+}
+
+function signaturesMatch(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  return aBuf.length === bBuf.length && crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+function numericIdForEmail(email: string): number {
+  const digest = crypto.createHash("sha256").update(email).digest();
+  return digest.readUInt32BE(0) & 0x7fffffff;
 }
 
 export function sessionCookieOptions(expires: Date) {
@@ -104,23 +114,17 @@ export function createAccount(
 ):
   | { ok: true; account: CreatedAccount }
   | { ok: false; error: string } {
-  const store = getStore();
   const name = input.name.trim();
   const email = normalizeEmail(input.email);
 
-  if (store.users.has(email)) {
-    return { ok: false, error: "An account with that email already exists." };
-  }
-
   const user: StoredUser = {
-    id: store.nextUserId++,
+    id: input.playerPid ?? numericIdForEmail(email),
     name,
     email,
     playerPid: input.playerPid ?? null,
   };
-  store.users.set(email, user);
 
-  const { token, expiresAt } = createSessionForUser(user.id);
+  const { token, expiresAt } = createSessionForUser(publicUser(user));
 
   return {
     ok: true,
@@ -133,46 +137,60 @@ export function createAccount(
 }
 
 export function setUserPlayerPid(userId: number, pid: number): void {
-  for (const u of getStore().users.values()) {
-    if (u.id === userId) {
-      u.playerPid = pid;
-      return;
-    }
-  }
+  void userId;
+  void pid;
 }
 
-export function createSessionForUser(userId: number): {
+export function createSessionForUser(user: SessionUser): {
   token: string;
   expiresAt: Date;
 } {
-  pruneExpiredSessions();
-  const token = crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
-  getStore().sessions.set(hashSessionToken(token), {
-    userId,
-    expiresAt: expiresAt.getTime(),
-  });
+  const payload: SessionPayload = {
+    ...user,
+    v: SESSION_VERSION,
+    exp: expiresAt.getTime(),
+    nonce: crypto.randomBytes(16).toString("base64url"),
+  };
+  const encodedPayload = toBase64Url(JSON.stringify(payload));
+  const token = `${encodedPayload}.${sign(encodedPayload)}`;
   return { token, expiresAt };
 }
 
 export function destroySession(token: string | undefined | null): void {
-  if (!token) return;
-  getStore().sessions.delete(hashSessionToken(token));
+  void token;
 }
 
 export function getUserBySessionToken(
   token: string | undefined | null,
 ): SessionUser | null {
   if (!token) return null;
-  const store = getStore();
-  pruneExpiredSessions();
-  const session = store.sessions.get(hashSessionToken(token));
-  if (!session) return null;
 
-  for (const u of store.users.values()) {
-    if (u.id === session.userId) {
-      return publicUser(u);
+  const [encodedPayload, signature, ...rest] = token.split(".");
+  if (!encodedPayload || !signature || rest.length > 0) return null;
+  if (!signaturesMatch(signature, sign(encodedPayload))) return null;
+
+  try {
+    const payload = JSON.parse(fromBase64Url(encodedPayload)) as Partial<SessionPayload>;
+    if (payload.v !== SESSION_VERSION) return null;
+    if (typeof payload.exp !== "number" || payload.exp <= Date.now()) return null;
+    if (typeof payload.id !== "number") return null;
+    if (typeof payload.name !== "string") return null;
+    if (typeof payload.email !== "string") return null;
+    if (
+      payload.playerPid !== null &&
+      typeof payload.playerPid !== "number"
+    ) {
+      return null;
     }
+
+    return {
+      id: payload.id,
+      name: payload.name,
+      email: normalizeEmail(payload.email),
+      playerPid: payload.playerPid,
+    };
+  } catch {
+    return null;
   }
-  return null;
 }
